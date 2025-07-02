@@ -7,6 +7,10 @@ use Illuminate\Foundation\Http\FormRequest;
 use App\Models\BookingSlot;
 use Illuminate\Support\Carbon;
 
+/**
+ * @property string $start_time
+ * @property string $end_time
+ */
 class StoreSingleSlotRequest extends FormRequest
 {
     public function rules(): array

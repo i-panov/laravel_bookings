@@ -8,49 +8,30 @@ use App\Http\Requests\StoreMultipleSlotsRequest;
 use App\Http\Requests\StoreSingleSlotRequest;
 use App\Models\Booking;
 use App\Models\BookingSlot;
+use App\Contracts\BookingServiceInterface;
+use App\DTO\SlotData;
+use App\Http\Resources\BookingCollectionResource;
+use App\Http\Resources\BookingResource;
+use App\Http\Resources\SlotResource;
 
 class BookingController extends Controller
 {
+    public function __construct(
+        protected BookingServiceInterface $bookingService
+    ) {}
+
     public function index()
     {
-        $user = auth()->user();
-
-        $bookings = $user->bookings()
-            ->with('slots')
-            ->get();
-
-        return response()->json(['bookings' => $bookings]);
+        $bookings = $this->bookingService->getUserBookings(auth()->user());
+        return new BookingCollectionResource($bookings);
     }
 
     public function create(StoreMultipleSlotsRequest $request)
     {
-        \DB::beginTransaction();
-
         try {
-            $user = auth()->user();
-            $booking = $user->bookings()->create();
-
-            $slotsData = collect($request->slots)->map(function ($slotData) use ($booking) {
-                return [
-                    'booking_id' => $booking->id,
-                    'start_time' => $slotData['start_time'],
-                    'end_time' => $slotData['end_time'],
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            })->toArray();
-
-            BookingSlot::insert($slotsData);
-
-            $bookingWithSlots = $booking->load('slots');
-
-            \DB::commit();
-
-            return response()->json([
-                'booking' => $bookingWithSlots
-            ], 201);
+            $booking = $this->bookingService->createBookingWithSlots(auth()->user(), $request->slots);
+            return (new BookingResource($booking))->response()->setStatusCode(201);
         } catch (\Exception $e) {
-            \DB::rollBack();
             throw new AppException('Не удалось создать бронирование', 500, $e);
         }
     }
@@ -58,10 +39,8 @@ class BookingController extends Controller
     public function updateSlot(Booking $booking, BookingSlot $slot, StoreSingleSlotRequest $request)
     {
         try {
-            $slot->start_time = $request->validated('start_time');
-            $slot->end_time = $request->validated('end_time');
-            $slot->save();
-            return response()->json(['slot' => $slot]);
+            $this->bookingService->updateBookingSlot($slot, new SlotData($request->start_time, $request->end_time));
+            return new SlotResource($slot);
         } catch (\Exception $e) {
             throw new AppException('Не удалось обновить слот', 500, $e);
         }
@@ -70,8 +49,8 @@ class BookingController extends Controller
     public function addSlot(Booking $booking, StoreSingleSlotRequest $request)
     {
         try {
-            $slot = $booking->slots()->create($request->validated());
-            return response()->json(['slot' => $slot], 201);
+            $slot = $this->bookingService->addSlotToBooking($booking, $request->validated());
+            return (new SlotResource($slot))->response()->setStatusCode(201);
         } catch (\Exception $e) {
             throw new AppException('Не удалось добавить слот', 500, $e);
         }

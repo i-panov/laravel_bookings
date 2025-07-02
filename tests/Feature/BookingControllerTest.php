@@ -189,8 +189,7 @@ test('пользователь не может удалить чужое бро�
 });
 
 test('создание бронирования откатывается при ошибке', function () {
-    DB::shouldReceive('beginTransaction')->once();
-    DB::shouldReceive('rollBack')->once();
+    DB::shouldReceive('transaction')->once();
     DB::shouldReceive('insert')->andThrow(new \Exception('Test exception'));
 
     $slots = [
